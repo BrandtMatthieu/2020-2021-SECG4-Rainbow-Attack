@@ -1,0 +1,16 @@
+mod config;
+mod parameters;
+
+fn main() {
+    let chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    let alphabet: std::vec::Vec<char> = chars.chars().collect();
+    let base = alphabet.len();
+
+    let cfg = config::Config {
+        min_password_length: 1,
+        max_password_size: 6,
+        max_file_size: 12000000000,
+        hash_count_per_buffer: 4000000,
+        thread_count: 4,
+	};
+}

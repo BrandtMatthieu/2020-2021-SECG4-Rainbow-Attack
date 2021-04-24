@@ -1,0 +1,26 @@
+[package]
+name = "rainbow_attack"
+version = "0.1.0"
+authors = ["g44422 <44422@etu.he2b.be>"]
+edition = "2018"
+description = "Implementation of the rainbow attack"
+readme = "README.md"
+repository = "https://git.esi-bru.be/2021-secg4-g44422/2021-rainbow-attack-g44422"
+license = "CC-BY-NC-SA-4.0"
+keywords = ["rainbow", "attack", "secg4", "44422"]
+categories = ["command-line-utilities"]
+publish = false
+default-run = "gen-passwd"
+
+[[bin]]
+name = "gen-passwd"
+path = "src/gen-passwd.rs"
+
+[[bin]]
+name = "check-passwd"
+path = "src/check-passwd.rs"
+
+[dependencies]
+num_cpus = "1.13.0"
+sha2 = "0.9.3"
+enum-as-inner = "0.3.3"

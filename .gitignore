@@ -1,0 +1,7 @@
+target/
+.idea/
+.exe/
+.vscode/
+*.pdb
+gen-passwd*
+check-passwd*
