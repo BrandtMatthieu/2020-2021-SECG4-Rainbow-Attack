@@ -51,7 +51,7 @@ pub mod parameter {
 
         allowed_number_values: Option<Vec<RangeInclusive<u64>>>,
         allowed_string_values: Option<Vec<String>>,
-		string_check_function: Option<fn(String) -> Result<String, String>>,
+		string_check_function: Option<fn(String) -> Result<(), ()>>,
     }
 
     impl Parameter {
@@ -65,20 +65,30 @@ pub mod parameter {
 					.and_then(|_| value.parse::<u64>().ok())
 					.and_then(|v| self.allowed_number_values
 						.is_none().then_some(v)
-						.or_else(|| self.allowed_number_values.as_ref().unwrap().iter().any(|r| r.contains(&v)).then_some(v)))
+						.or_else(|| self.allowed_number_values
+							.as_ref()
+							.unwrap()
+							.iter()
+							.any(|r| r.contains(&v))
+							.then_some(v)))
 					.and_then(|v| Some(self.value = Some(ParameterValue::Number(v))))
 					.and_then(|_| Some(())))
 				.or(self.has(&ParameterType::BOOLEAN)
 					.and_then(|_| {
 						match value.as_str() {
 							"true" => Some(self.value = Some(ParameterValue::Boolean(true))),
+							"" => Some(self.value = Some(ParameterValue::Boolean(true))),
 							"false" => Some(self.value = Some(ParameterValue::Boolean(false))),
 							_ => None,
 						}
 					})
 					.and_then(|_| Some(())))
 				.or(self.has(&ParameterType::ENUM)
-					.and_then(|_| self.allowed_string_values.as_ref().unwrap().contains(value).then_some(()))
+					.and_then(|_| self.allowed_string_values
+						.as_ref()
+						.unwrap()
+						.contains(value)
+						.then_some(()))
 					.and_then(|_| Some(self.value = Some(ParameterValue::String(value.clone()))))
 					.and_then(|_| Some(())))
 				.or(self.has(&ParameterType::STRING)
@@ -126,12 +136,12 @@ pub mod parameter {
     }
 
     pub fn get_parameters() -> Vec<Parameter> {
-        let parameters = vec![
+        let mut parameters = vec![
             Parameter {
 				long_names: vec![String::from("min-password-length")],
                 short_names: vec![String::from("mip")],
 				
-                description: String::from("The minimum length of the passwords"),
+                description: String::from("Minimum length of the passwords."),
                 types: vec![ParameterType::NUMBER],
 
                 default_value: ParameterValue::Number(6),
@@ -145,7 +155,7 @@ pub mod parameter {
 				long_names: vec![String::from("max-password-length")],
                 short_names: vec![String::from("map")],
 				
-                description: String::from("The maximum length of the passwords"),
+                description: String::from("Maximum length of the passwords."),
                 types: vec![ParameterType::NUMBER],
 
                 default_value: ParameterValue::Number(8),
@@ -159,7 +169,7 @@ pub mod parameter {
 				long_names: vec![String::from("password-file")],
                 short_names: vec![String::from("pf")],
 
-                description: String::from("The path to the file containing the passwords"),
+                description: String::from("Path to the file containing / where the store the passwords."),
                 types: vec![ParameterType::STRING],
 
                 default_value: ParameterValue::String(String::from("./passwords.txt")),
@@ -167,13 +177,13 @@ pub mod parameter {
 
                 allowed_number_values: None,
                 allowed_string_values: None,
-				string_check_function: None,
+				string_check_function: Some(is_file_or_does_not_exists),
             },
             Parameter {
 				long_names: vec![String::from("hash-file")],
                 short_names: vec![String::from("hf")],
 
-                description: String::from("The path to the file containing the hashes"),
+                description: String::from("Path to the file containing / where to store the hashes."),
                 types: vec![ParameterType::STRING],
 
                 default_value: ParameterValue::String(String::from("./hashes.txt")),
@@ -181,13 +191,55 @@ pub mod parameter {
 
                 allowed_number_values: None,
                 allowed_string_values: None,
+				string_check_function: Some(is_file_or_does_not_exists),
+            },
+            Parameter {
+				long_names: vec![String::from("max-hash-file-size")],
+                short_names: vec![String::from("mhfs")],
+
+                description: String::from("Maximum size in bytes of the file containing the hashes. '0' to disable."),
+                types: vec![ParameterType::NUMBER],
+
+                default_value: ParameterValue::Number(0),
+                value: None,
+
+                allowed_number_values: Some(vec![0 ..= ((256 / 8) + 1) * 1_000_000_000]),
+                allowed_string_values: None,
+				string_check_function: None,
+            },
+            Parameter {
+				long_names: vec![String::from("threads")],
+                short_names: vec![String::from("t")],
+
+                description: String::from("Number of concurrent threads. Defaults to # of threads."),
+                types: vec![ParameterType::NUMBER],
+
+                default_value: ParameterValue::Number(num_cpus::get() as u64),
+                value: None,
+
+                allowed_number_values: Some(vec![(1 ..= 128)]),
+                allowed_string_values: None,
+				string_check_function: None,
+            },
+            Parameter {
+				long_names: vec![String::from("reduction-rounds")],
+                short_names: vec![String::from("rr")],
+
+                description: String::from("Number of times the hash has to go trough the reducction function."),
+                types: vec![ParameterType::NUMBER],
+
+                default_value: ParameterValue::Number(1000),
+                value: None,
+
+                allowed_number_values: Some(vec![(1 ..= 1_000_000)]),
+                allowed_string_values: None,
 				string_check_function: None,
             },
             Parameter {
 				long_names: vec![String::from("help")],
                 short_names: vec![String::from("h")],
 
-                description: String::from("Prints this help message"),
+                description: String::from("Prints this help message."),
                 types: vec![ParameterType::BOOLEAN],
 
                 default_value: ParameterValue::Boolean(false),
@@ -199,30 +251,39 @@ pub mod parameter {
             },
         ];
 
-		if (args().len() == 1)
-		|| *(get_named_parameter(&parameters, &String::from("help")).unwrap().get_value().as_boolean().unwrap()) {
-			print_help(&parameters);
-			exit(0);
-		}
-
-        return args()
+        args()
             .skip(1)
             .filter(|arg| arg.trim_start_matches("-") != arg)
             .map(|arg| arg.trim_start_matches("-").to_string())
             .map(|arg| arg.split_once("=")
 			.and_then(|t| Some((t.0.to_string(), t.1.to_string())))
 			.unwrap_or((arg, String::from(""))))
-            .fold(parameters, |mut parameters, current| {
-                parameters
-					.iter_mut()
-					.find(|parameter| parameter.is(&current.0))
-					.and_then(|param| Some(param.set_value(&current.1)));
-				return parameters;
-            });
+            .fold(&mut parameters, |mut parameters, current| get_named_parameter(&mut parameters, &current.0)
+				.and_then(|param| param
+					.set_value(&current.1)
+					.and(Err(""))
+					.ok())
+				.unwrap_or(parameters));
+
+		if (args().len() == 1)
+		|| get_named_parameter(&mut parameters, &String::from("help"))
+			.and_then(|parameter| Some(*parameter.get_value().as_boolean().unwrap()))
+			.contains(&true) {
+			print_help(&parameters);
+			exit(0);
+		}
+		return parameters;
     }
 
-	pub fn get_named_parameter<'a>(parameters: &'a Vec<Parameter>, name: &String) -> Option<&'a Parameter> {
-		parameters.iter().find(|param| param.is(name))
+	pub fn get_named_parameter<'a>(parameters: &'a mut Vec<Parameter>, name: &String) -> Option<&'a mut Parameter> {
+		parameters.iter_mut().find(|param| (**param).is(name))
+	}
+
+	pub fn is_file_or_does_not_exists(path: String) -> Result<(), ()> {
+		let f = std::path::Path::new(&path);
+		return (f.is_file() || !f.exists())
+			.then_some(())
+			.ok_or(());
 	}
 
 	pub fn print_help(parameters: &Vec<Parameter>) -> () {
